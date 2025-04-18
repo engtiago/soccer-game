@@ -8,12 +8,21 @@ let height = canvas.height = window.innerHeight;
 
 // Configurações de física e massas
 const friction = 0.985;
-const restitution = 1.2;
-const massBall = 1;
+const restitution = 0.8;    // Reduzido de 1.2 para 0.8 para colisões mais realistas
+const massBall = 0.8;
 const massButton = 3;
-const maxSpeed = 15;
+const maxSpeed = 12;        // Reduzido de 15 para 12
+const iterations = 3;       // Novo: número de iterações para verificação de colisão
 const stopThreshold = 0.2;
 let rotation = 0.5;
+
+const ballConfig = {
+    rotation: 0,
+    panels: 5,         // Reduzido para 5 painéis para melhor distribuição
+    shadowOffset: 4,
+    scale: 0.5,        // Reduzido para espaçar mais os painéis
+    borderWidth: 1.5   // Novo: largura da borda dos painéis
+};
 
 let currentPlayer = 1;
 let scores = {1: 0, 2: 0};
@@ -129,9 +138,19 @@ function gameLoop() {
     ball.vx *= friction; ball.vy *= friction;
     clampSpeed(ball);
     if (Math.hypot(ball.vx,ball.vy)<stopThreshold){ball.vx=ball.vy=0;ball.moving=false;}
+    ballConfig.rotation += Math.hypot(ball.vx, ball.vy) * 0.03;
   }
   // colisões
-  for(let i=0;i<pieces.length;i++){for(let j=i+1;j<pieces.length;j++) collide(pieces[i],pieces[j]); collide(pieces[i],ball);}
+  for (let iter = 0; iter < iterations; iter++) {
+    for (let i = 0; i < pieces.length; i++) {
+      // Colisão entre peças
+      for (let j = i + 1; j < pieces.length; j++) {
+        collide(pieces[i], pieces[j]);
+      }
+      // Colisão com a bola
+      collide(pieces[i], ball);
+    }
+  }
   // gols
   const top=height/2-75, bot=height/2+75;
   if(ball.x-ball.r<=0&&ball.y>top&&ball.y<bot){scores[currentPlayer]++;updateUI();resetPositions();return;}
@@ -142,9 +161,51 @@ function gameLoop() {
   draw();
 }
 
-function collide(a,b){
-  const dx=b.x-a.x, dy=b.y-a.y, dist=Math.hypot(dx,dy);
-  if(dist<a.r+b.r){const nx=dx/dist,ny=dy/dist;const dvx=b.vx-a.vx,dvy=b.vy-a.vy;const rel=dvx*nx+dvy*ny;if(rel>0)return;const imp=-(1+restitution)*rel/(1/a.m+1/b.m), ix=imp*nx, iy=imp*ny; a.vx-=ix/a.m; a.vy-=iy/a.m; b.vx+=ix/b.m; b.vy+=iy/b.m; const ov=a.r+b.r-dist+1, ra=b.m/(a.m+b.m), rb=a.m/(a.m+b.m); a.x-=nx*ov*ra; a.y-=ny*ov*ra; b.x+=nx*ov*rb; b.y+=ny*ov*rb; a.moving=true; b.moving=true;}
+function collide(a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const dist = Math.hypot(dx, dy);
+  const minDist = a.r + b.r;
+
+  if (dist < minDist) {
+    // Normalizar vetores
+    const nx = dx / dist;
+    const ny = dy / dist;
+
+    // Calcular velocidade relativa
+    const dvx = b.vx - a.vx;
+    const dvy = b.vy - a.vy;
+    const relativeVelocity = dvx * nx + dvy * ny;
+
+    // Ignorar colisão se os objetos estão se afastando
+    if (relativeVelocity > 0) return;
+
+    // Calcular impulso
+    const imp = -(1 + restitution) * relativeVelocity / (1/a.m + 1/b.m);
+    const ix = imp * nx;
+    const iy = imp * ny;
+
+    // Aplicar impulso
+    a.vx -= ix / a.m;
+    a.vy -= iy / a.m;
+    b.vx += ix / b.m;
+    b.vy += iy / b.m;
+
+    // Corrigir sobreposição
+    const overlap = minDist - dist;
+    const correction = overlap * 0.5; // Dividir correção entre os dois objetos
+    const correctionX = nx * correction;
+    const correctionY = ny * correction;
+
+    // Aplicar correção de posição
+    a.x -= correctionX;
+    a.y -= correctionY;
+    b.x += correctionX;
+    b.y += correctionY;
+
+    a.moving = true;
+    b.moving = true;
+  }
 }
 
 function switchPlayer(){ currentPlayer=currentPlayer===1?2:1; startTurnTimer(); }
@@ -159,7 +220,7 @@ function draw(){
   pieces.forEach(p=>{ if(p.player===currentPlayer&&!p.moving){ctx.save();ctx.strokeStyle=p.player===1?'rgba(255,200,0,0.8)':'rgba(0,200,255,0.8)';ctx.lineWidth=3;ctx.setLineDash([8,8]);ctx.lineDashOffset=-rotation;ctx.beginPath();ctx.arc(p.x,p.y,p.r+8,0,2*Math.PI);ctx.stroke();ctx.restore();}});
   // peças e bola
   pieces.forEach(p=>{ctx.fillStyle=p.player===1?'#f00':'#00f';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,2*Math.PI);ctx.fill();});
-  ctx.fillStyle='#ff0';ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,2*Math.PI);ctx.fill();
+  drawSoccerBall();
   // predição (collisionToggle)
   if(collisionToggle.checked && selected){
     const dx=dragEnd.x-startPoint.x, dy=dragEnd.y-startPoint.y, d=Math.hypot(dx,dy);
@@ -167,6 +228,29 @@ function draw(){
   }
   // indicador força
   if(selected&&dragEnd){const dx=dragEnd.x-startPoint.x,dy=dragEnd.y-startPoint.y,force=Math.min(Math.hypot(dx,dy)/5,maxSpeed),angle=Math.atan2(dy,dx);ctx.strokeStyle=selected.player===1?'#ff0':'#0ff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(selected.x,selected.y);const len=force*10;ctx.lineTo(selected.x+Math.cos(angle)*len,selected.y+Math.sin(angle)*len);ctx.stroke();}
+}
+
+function drawSoccerBall() {
+    const ballImage = document.getElementById('soccerBall');
+    const x = ball.x - ball.r;
+    const y = ball.y - ball.r;
+    const size = ball.r * 2;
+    
+    // Salvar contexto para aplicar rotação
+    ctx.save();
+    
+    // Transladar para o centro da bola
+    ctx.translate(ball.x, ball.y);
+    // Rotacionar baseado na velocidade
+    ctx.rotate(ballConfig.rotation);
+    // Voltar para a posição original
+    ctx.translate(-ball.x, -ball.y);
+    
+    // Desenhar a imagem
+    ctx.drawImage(ballImage, x, y, size, size);
+    
+    // Restaurar contexto
+    ctx.restore();
 }
 
 canvas.addEventListener('mousedown',e=>{if(isMoving()||timeLeft<=0)return;const rect=canvas.getBoundingClientRect();const x=e.clientX-rect.left,y=e.clientY-rect.top;selected=pieces.find(p=>p.player===currentPlayer&&Math.hypot(x-p.x,y-p.y)<=p.r);if(selected){startPoint={x,y};dragEnd={x,y};}});
