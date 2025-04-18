@@ -1,0 +1,45 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+}
+#controls {
+  position: absolute;
+  bottom: 10px;
+  right: 120px; /* posicionado ao lado esquerdo do botão Reiniciar */
+  z-index: 10;
+  color: #fff;
+  font-size: 16px;
+}
+canvas {
+  display: block;
+  background: #388e3c;
+}
+#scoreboard,
+#timer,
+#turnTimer {
+  position: absolute;
+  color: #fff;
+  font-size: 18px;
+}
+#scoreboard {
+  top: 10px;
+  left: 200px;
+}
+#timer {
+  top: 10px;
+  right: 10px;
+}
+#turnTimer {
+  top: 40px;
+  left: 200px;
+}
+#resetBtn {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  padding: 8px 16px;
+  font-size: 16px;
+}
